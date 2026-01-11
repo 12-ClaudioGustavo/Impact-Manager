@@ -9,7 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
-  Dimensions,
+  Dimensions, 
   Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -109,11 +109,11 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <LinearGradient
-      colors={["#1a2a6c", "#b21f1f", "#fdbb2d"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+          colors={["#2563EB", "#1E40AF"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.container}
+        >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
