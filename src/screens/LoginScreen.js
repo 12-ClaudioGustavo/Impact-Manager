@@ -15,10 +15,14 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get("window");
 
 const LoginScreen = ({ navigation }) => {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -53,8 +57,6 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      console.log("🔐 Tentando fazer login...");
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -66,12 +68,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      console.log("✅ Login realizado:", data.user.email);
-
-      // Verificar se o email foi confirmado
       if (!data.user.email_confirmed_at) {
-        console.log("⚠️ Email não confirmado");
-
         Alert.alert(
           "Email Não Confirmado",
           "Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.",
@@ -79,7 +76,6 @@ const LoginScreen = ({ navigation }) => {
             {
               text: "Reenviar Email",
               onPress: () => {
-                // Fazer logout e ir para tela de verificação
                 supabase.auth.signOut();
                 navigation.navigate("EmailVerification", {
                   email: formData.email.trim().toLowerCase(),
@@ -96,9 +92,6 @@ const LoginScreen = ({ navigation }) => {
         );
         return;
       }
-
-      console.log("🎉 Login bem-sucedido! Email confirmado.");
-      // O navegador redirecionará automaticamente devido ao estado de sessão
     } catch (error) {
       console.error("❌ Erro inesperado ao fazer login:", error);
       Alert.alert("Erro", "Ocorreu um erro ao fazer login");
@@ -109,7 +102,7 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <LinearGradient
-          colors={["#2563EB", "#1E40AF"]}
+          colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.container}
@@ -119,12 +112,11 @@ const LoginScreen = ({ navigation }) => {
         style={styles.keyboardView}
       >
         <View style={styles.content}>
-          {/* Header */}
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.textOnPrimary} />
           </TouchableOpacity>
 
           <View style={styles.headerTitleContainer}>
@@ -147,17 +139,15 @@ const LoginScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          {/* Glass Form Container */}
           <View style={styles.glassContainer}>
-            {/* Email */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>E-mail</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="mail-outline" size={20} color="#6B7280" />
+                <Ionicons name="mail-outline" size={20} color={theme.iconColorLight} />
                 <TextInput
                   style={styles.input}
                   placeholder="seu@email.com"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={theme.inputPlaceholder}
                   value={formData.email}
                   onChangeText={(text) => updateFormData("email", text)}
                   keyboardType="email-address"
@@ -167,19 +157,18 @@ const LoginScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Password */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Senha</Text>
               <View style={styles.inputContainer}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color="#6B7280"
+                  color={theme.iconColorLight}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Digite sua senha"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={theme.inputPlaceholder}
                   value={formData.password}
                   onChangeText={(text) => updateFormData("password", text)}
                   secureTextEntry={!showPassword}
@@ -191,18 +180,16 @@ const LoginScreen = ({ navigation }) => {
                   <Ionicons
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
                     size={20}
-                    color="#6B7280"
+                    color={theme.iconColorLight}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Forgot Password */}
             <TouchableOpacity style={styles.forgotPassword}>
               <Text style={styles.forgotPasswordText}>Esqueceu sua senha?</Text>
             </TouchableOpacity>
 
-            {/* Login Button */}
             <TouchableOpacity
               onPress={handleLogin}
               disabled={loading}
@@ -210,26 +197,24 @@ const LoginScreen = ({ navigation }) => {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#1a2a6c" />
+                <ActivityIndicator color={theme.primaryDark} />
               ) : (
                 <Text style={styles.loginButtonText}>Entrar</Text>
               )}
             </TouchableOpacity>
 
-            {/* Social Login */}
             <View style={styles.socialContainer}>
               <Text style={styles.socialText}>Ou entre com</Text>
               <View style={styles.socialButtons}>
                 <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-google" size={24} color="#DB4437" />
+                  <Ionicons name="logo-google" size={24} color={theme.error} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-apple" size={24} color="#000000" />
+                  <Ionicons name="logo-apple" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Register Link */}
             <View style={styles.registerLink}>
               <Text style={styles.registerText}>Não tem uma conta? </Text>
               <TouchableOpacity onPress={() => navigation.navigate("Register")}>
@@ -238,7 +223,6 @@ const LoginScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               Ao entrar, você concorda com nossos{"\n"}
@@ -252,7 +236,7 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -263,7 +247,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 50,
-    justifyContent: "center", // Center vertically if possible
+    justifyContent: "center",
     paddingBottom: 30,
   },
   backButton: {
@@ -271,7 +255,7 @@ const styles = StyleSheet.create({
     top: 50,
     left: 24,
     zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: 'rgba(255,255,255,0.2)', // Static for transparent effect
     padding: 8,
     borderRadius: 12,
   },
@@ -282,29 +266,29 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textOnPrimary,
   },
   glassContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: theme.backgroundCard,
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    shadowColor: "#000",
+    borderColor: theme.border,
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 20,
   },
   inputGroup: {
     marginBottom: 16,
   },
   label: {
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
     fontWeight: "600",
     marginBottom: 8,
     fontSize: 14,
@@ -313,7 +297,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: theme.inputBackground,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -322,32 +306,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     fontSize: 16,
-    color: "#1F2937",
+    color: theme.text,
   },
   forgotPassword: {
     alignSelf: "flex-end",
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: "#fdbb2d", // Gold accent
+    color: theme.warning, // Gold accent
     fontWeight: "600",
     fontSize: 14,
   },
   loginButton: {
-    backgroundColor: "#fdbb2d",
+    backgroundColor: theme.warning,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
-    shadowColor: "#000",
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 8,
     elevation: 4,
   },
   loginButtonText: {
-    color: "#1a2a6c",
+    color: theme.primaryDark,
     fontSize: 18,
     fontWeight: "bold",
   },
@@ -356,7 +340,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   socialText: {
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textOnPrimary,
     marginBottom: 16,
     fontSize: 14,
   },
@@ -368,12 +352,12 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -382,10 +366,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   registerText: {
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textOnPrimary,
   },
   registerLinkText: {
-    color: "#F59E0B",
+    color: theme.warning,
     fontWeight: "bold",
   },
   footer: {
@@ -393,13 +377,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footerText: {
-    color: "rgba(255,255,255,0.6)",
+    color: theme.textLight,
     fontSize: 12,
     textAlign: "center",
   },
   footerBold: {
     fontWeight: "600",
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textOnPrimary,
   },
 });
 

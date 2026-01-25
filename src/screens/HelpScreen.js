@@ -9,8 +9,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 
 const HelpScreen = ({ navigation }) => {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
   const faqItems = [
     {
       question: 'Como adicionar um novo membro?',
@@ -34,7 +38,7 @@ const HelpScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ajuda e FAQ</Text>
         <View style={{ width: 40 }} />
@@ -58,7 +62,7 @@ const HelpScreen = ({ navigation }) => {
             style={styles.contactButton}
             onPress={() => Linking.openURL('mailto:suporte@myapp.com')}
           >
-            <Ionicons name="mail" size={20} color="#FFFFFF" />
+            <Ionicons name="mail" size={20} color={theme.textOnPrimary} />
             <Text style={styles.contactButtonText}>Enviar E-mail</Text>
           </TouchableOpacity>
         </View>
@@ -67,10 +71,10 @@ const HelpScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -79,8 +83,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: theme.border,
+    backgroundColor: theme.backgroundCard,
   },
   backButton: {
     padding: 8,
@@ -88,7 +92,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1F2937',
+    color: theme.text,
   },
   content: {
     flex: 1,
@@ -97,26 +101,26 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: theme.text,
     marginBottom: 16,
   },
   faqItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.backgroundCard,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
   },
   question: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: theme.text,
     marginBottom: 8,
   },
   answer: {
     fontSize: 14,
-    color: '#4B5563',
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   contactSection: {
@@ -126,21 +130,21 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: theme.textSecondary,
     marginBottom: 16,
     textAlign: 'center',
   },
   contactButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: theme.success,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
     gap: 8,
   },
   contactButtonText: {
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
     fontWeight: '600',
     fontSize: 16,
   },

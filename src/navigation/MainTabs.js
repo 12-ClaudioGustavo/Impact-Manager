@@ -2,10 +2,11 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
-// Screens (vamos criar depois)
+// Screens
 import DashboardScreen from '../screens/DashboardScreen';
-import MembersScreen from '../screens/MembersScreen';
+import MembersNavigator from './MembersNavigator';
 import DonationsScreen from '../screens/DonationsScreen';
 import EventsScreen from '../screens/EventsScreen';
 import MoreScreen from '../screens/MoreScreen';
@@ -13,6 +14,8 @@ import MoreScreen from '../screens/MoreScreen';
 const Tab = createBottomTabNavigator();
 
 const MainTabs = () => {
+  const { theme } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -43,19 +46,19 @@ const MainTabs = () => {
             </View>
           );
         },
-        tabBarActiveTintColor: '#2563EB',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textLight,
         tabBarStyle: {
           height: 60,
           paddingBottom: 8,
           paddingTop: 8,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: theme.backgroundCard,
           borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
+          borderTopColor: theme.border,
           elevation: 10,
-          shadowColor: '#000',
+          shadowColor: theme.shadow,
           shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.1,
+          shadowOpacity: theme.shadowOpacity,
           shadowRadius: 8,
         },
         tabBarLabelStyle: {
@@ -72,7 +75,7 @@ const MainTabs = () => {
       />
       <Tab.Screen
         name="Members"
-        component={MembersScreen}
+        component={MembersNavigator}
         options={{ tabBarLabel: 'Membros' }}
       />
       <Tab.Screen

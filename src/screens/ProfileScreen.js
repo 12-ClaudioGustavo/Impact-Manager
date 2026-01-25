@@ -15,8 +15,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import PhoneInputField from "../components/PhoneInputField";
 import { supabase } from "../lib/supabase";
+import { useTheme } from '../contexts/ThemeContext';
 
 const ProfileScreen = ({ navigation }) => {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [formData, setFormData] = useState({
@@ -39,12 +43,10 @@ const ProfileScreen = ({ navigation }) => {
 
       const user = session.user;
 
-      // Get data from metadata first
       let fullName = user.user_metadata?.full_name || "";
       let phone = user.user_metadata?.phone || "";
       const email = user.email;
 
-      // Try to get from users table for more complete info
       const { data: userData, error } = await supabase
         .from("users")
         .select("*")
@@ -81,7 +83,6 @@ const ProfileScreen = ({ navigation }) => {
         data: { session },
       } = await supabase.auth.getSession();
 
-      // 1. Update Auth Metadata
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           full_name: formData.fullName,
@@ -91,7 +92,6 @@ const ProfileScreen = ({ navigation }) => {
 
       if (authError) throw authError;
 
-      // 2. Update Users Table
       const { error: dbError } = await supabase
         .from("users")
         .update({
@@ -121,7 +121,7 @@ const ProfileScreen = ({ navigation }) => {
   if (fetching) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563EB" />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -133,7 +133,7 @@ const ProfileScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meu Perfil</Text>
         <View style={{ width: 40 }} />
@@ -165,6 +165,7 @@ const ProfileScreen = ({ navigation }) => {
                   setFormData({ ...formData, fullName: text })
                 }
                 placeholder="Seu nome completo"
+                placeholderTextColor={theme.inputPlaceholder}
               />
             </View>
 
@@ -184,6 +185,7 @@ const ProfileScreen = ({ navigation }) => {
                 style={[styles.input, styles.disabledInput]}
                 value={formData.email}
                 editable={false}
+                placeholderTextColor={theme.inputPlaceholder}
               />
               <Text style={styles.helperText}>
                 O e-mail não pode ser alterado.
@@ -199,7 +201,7 @@ const ProfileScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={theme.textOnPrimary} />
             ) : (
               <Text style={styles.saveButtonText}>Salvar Alterações</Text>
             )}
@@ -210,10 +212,10 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: theme.background,
   },
   loadingContainer: {
     flex: 1,
@@ -227,8 +229,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: theme.border,
+    backgroundColor: theme.backgroundCard,
   },
   backButton: {
     padding: 8,
@@ -236,7 +238,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1F2937",
+    color: theme.text,
   },
   content: {
     flex: 1,
@@ -250,7 +252,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#2563EB",
+    backgroundColor: theme.primary,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -258,11 +260,11 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
   },
   emailText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: theme.textSecondary,
   },
   form: {
     gap: 20,
@@ -273,39 +275,39 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#374151",
+    color: theme.text,
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.inputBackground,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: theme.inputBorder,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: "#1F2937",
+    color: theme.text,
   },
   disabledInput: {
-    backgroundColor: "#F3F4F6",
-    color: "#9CA3AF",
+    backgroundColor: theme.inputDisabled,
+    color: theme.textSecondary,
   },
   helperText: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: theme.textSecondary,
   },
   footer: {
     padding: 24,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: theme.border,
   },
   saveButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: theme.primary,
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
   },
   saveButtonText: {
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
     fontWeight: "600",
     fontSize: 16,
   },

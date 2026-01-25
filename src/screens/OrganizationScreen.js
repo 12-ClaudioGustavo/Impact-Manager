@@ -14,8 +14,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
+import { useTheme } from '../contexts/ThemeContext';
 
 const OrganizationScreen = ({ navigation }) => {
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
+
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [orgData, setOrgData] = useState({
@@ -35,7 +39,6 @@ const OrganizationScreen = ({ navigation }) => {
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      // 1. Get User's Organization ID
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("organization_id")
@@ -48,7 +51,6 @@ const OrganizationScreen = ({ navigation }) => {
         return;
       }
 
-      // 2. Get Organization Details
       const { data: org, error: orgError } = await supabase
         .from("organizations")
         .select("*")
@@ -62,8 +64,6 @@ const OrganizationScreen = ({ navigation }) => {
         name: org.name || "",
         description: org.description || "",
       });
-
-      console.log("Organization loaded:", { id: org.id, name: org.name });
     } catch (error) {
       console.error("Error fetching organization:", error);
       Alert.alert("Erro", "Não foi possível carregar os dados da organização.");
@@ -109,7 +109,7 @@ const OrganizationScreen = ({ navigation }) => {
   if (fetching) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7C3AED" />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -121,7 +121,7 @@ const OrganizationScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Minha Organização</Text>
         <View style={{ width: 40 }} />
@@ -134,7 +134,7 @@ const OrganizationScreen = ({ navigation }) => {
         <ScrollView style={styles.content}>
           <View style={styles.iconContainer}>
             <View style={styles.iconCircle}>
-              <Ionicons name="business" size={40} color="#7C3AED" />
+              <Ionicons name="business" size={40} color={theme.primary} />
             </View>
           </View>
 
@@ -146,6 +146,7 @@ const OrganizationScreen = ({ navigation }) => {
                 value={orgData.name}
                 onChangeText={(text) => setOrgData({ ...orgData, name: text })}
                 placeholder="Nome da sua ONG/Igreja"
+                placeholderTextColor={theme.inputPlaceholder}
               />
             </View>
 
@@ -161,6 +162,7 @@ const OrganizationScreen = ({ navigation }) => {
                 multiline
                 numberOfLines={4}
                 textAlignVertical="top"
+                placeholderTextColor={theme.inputPlaceholder}
               />
             </View>
           </View>
@@ -173,7 +175,7 @@ const OrganizationScreen = ({ navigation }) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={theme.textOnPrimary} />
             ) : (
               <Text style={styles.saveButtonText}>Salvar Alterações</Text>
             )}
@@ -184,10 +186,10 @@ const OrganizationScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: theme.background,
   },
   loadingContainer: {
     flex: 1,
@@ -201,8 +203,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: theme.border,
+    backgroundColor: theme.backgroundCard,
   },
   backButton: {
     padding: 8,
@@ -210,7 +212,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#1F2937",
+    color: theme.text,
   },
   content: {
     flex: 1,
@@ -224,7 +226,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#F3E8FF",
+    backgroundColor: theme.primaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -238,34 +240,34 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#374151",
+    color: theme.text,
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.inputBackground,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: theme.inputBorder,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: "#1F2937",
+    color: theme.text,
   },
   textArea: {
     minHeight: 100,
   },
   footer: {
     padding: 24,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: theme.border,
   },
   saveButton: {
-    backgroundColor: "#7C3AED",
+    backgroundColor: theme.primary,
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
   },
   saveButtonText: {
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
     fontWeight: "600",
     fontSize: 16,
   },

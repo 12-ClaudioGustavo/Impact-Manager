@@ -16,6 +16,8 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 import OrganizationScreen from "./src/screens/OrganizationScreen";
 import HelpScreen from "./src/screens/HelpScreen";
 import AboutScreen from "./src/screens/AboutScreen";
+import EventsScreen from "./src/screens/EventsScreen";
+import AddEvent from "./src/screens/AddEventScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +66,8 @@ function AppContent() {
                 name="EmailVerification"
                 component={EmailVerificationScreen}
               />
+              <Stack.Screen name="EventsList" component={EventsScreen} />
+              <Stack.Screen name="AddEvent" component={AddEvent} />
             </>
           ) : (
             <>

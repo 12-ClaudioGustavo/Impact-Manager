@@ -12,8 +12,12 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
+import { useTheme } from '../contexts/ThemeContext';
 
 const EmailVerificationScreen = ({ navigation, route }) => {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
+
   const [loading, setLoading] = useState(false);
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -37,19 +41,16 @@ const EmailVerificationScreen = ({ navigation, route }) => {
   }, [resendCooldown]);
 
   const handleCodeChange = (text, index) => {
-    // Apenas números
     if (text && !/^\d+$/.test(text)) return;
 
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
 
-    // Auto-focus próximo input
     if (text && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-verificar quando todos os dígitos forem preenchidos
     if (text && index === 5 && newCode.every((digit) => digit !== "")) {
       Keyboard.dismiss();
       handleVerifyCode(newCode.join(""));
@@ -73,8 +74,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
     setLoading(true);
 
     try {
-      console.log("🔢 Verificando código:", verificationCode);
-
       const { data, error } = await supabase.rpc("verify_code", {
         p_email: email,
         p_code: verificationCode,
@@ -90,10 +89,7 @@ const EmailVerificationScreen = ({ navigation, route }) => {
         return;
       }
 
-      console.log("📦 Resposta da verificação:", data);
-
       if (data.success) {
-        console.log("✅ Código verificado com sucesso!");
         Alert.alert(
           "Email Confirmado!",
           "Seu email foi verificado com sucesso. Você pode fazer login agora.",
@@ -108,8 +104,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
           ],
         );
       } else {
-        console.log("❌ Verificação falhou:", data.error);
-
         let message = data.message || "Código inválido.";
 
         if (data.error === "code_expired") {
@@ -126,7 +120,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
           Alert.alert("Código Inválido", message);
         }
 
-        // Limpar código
         setCode(["", "", "", "", "", ""]);
         inputRefs.current[0]?.focus();
       }
@@ -144,8 +137,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
     setLoading(true);
 
     try {
-      console.log("📧 Verificando se pode reenviar código...");
-
       const { data: canResendData, error: canResendError } = await supabase.rpc(
         "can_resend_code",
         { p_email: email },
@@ -169,7 +160,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
         return;
       }
 
-      // Buscar user_id
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -182,8 +172,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
         setLoading(false);
         return;
       }
-
-      console.log("🔢 Gerando novo código...");
 
       const { data: codeData, error: codeError } = await supabase.rpc(
         "generate_verification_code",
@@ -199,8 +187,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
         setLoading(false);
         return;
       }
-
-      console.log("✅ Novo código gerado:", codeData);
 
       Alert.alert(
         "Código Enviado!",
@@ -220,7 +206,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
   };
 
   const handlePaste = (text) => {
-    // Extrair apenas números
     const numbers = text.replace(/\D/g, "").slice(0, 6);
 
     if (numbers.length === 6) {
@@ -228,7 +213,6 @@ const EmailVerificationScreen = ({ navigation, route }) => {
       setCode(newCode);
       inputRefs.current[5]?.focus();
 
-      // Auto-verificar
       setTimeout(() => {
         handleVerifyCode(numbers);
       }, 100);
@@ -242,19 +226,19 @@ const EmailVerificationScreen = ({ navigation, route }) => {
 
   return (
     <LinearGradient
-      colors={["#2563EB", "#1E40AF"]}
+      colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <View style={styles.content}>
         <TouchableOpacity onPress={handleBackToLogin} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={24} color={theme.textOnPrimary} />
         </TouchableOpacity>
 
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-            <Ionicons name="mail-outline" size={60} color="#2563EB" />
+            <Ionicons name="mail-outline" size={60} color={theme.primary} />
           </View>
         </View>
 
@@ -265,7 +249,7 @@ const EmailVerificationScreen = ({ navigation, route }) => {
         </Text>
 
         <View style={styles.emailContainer}>
-          <Ionicons name="mail" size={20} color="#2563EB" />
+          <Ionicons name="mail" size={20} color={theme.primary} />
           <Text style={styles.emailText}>{email || "seu email"}</Text>
         </View>
 
@@ -298,13 +282,13 @@ const EmailVerificationScreen = ({ navigation, route }) => {
           disabled={loading || code.some((d) => !d)}
         >
           {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={theme.textOnPrimary} />
           ) : (
             <>
               <Ionicons
                 name="checkmark-circle-outline"
                 size={24}
-                color="#FFFFFF"
+                color={theme.textOnPrimary}
               />
               <Text style={styles.verifyButtonText}>Verificar Código</Text>
             </>
@@ -322,7 +306,7 @@ const EmailVerificationScreen = ({ navigation, route }) => {
           <Ionicons
             name="refresh-outline"
             size={20}
-            color={resendCooldown > 0 ? "#9CA3AF" : "#2563EB"}
+            color={resendCooldown > 0 ? theme.textLight : theme.primary}
           />
           <Text
             style={[
@@ -358,7 +342,7 @@ const EmailVerificationScreen = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -372,7 +356,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 50,
     left: 24,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: 'rgba(255,255,255,0.2)', // Static for transparent effect
     padding: 8,
     borderRadius: 12,
     zIndex: 10,
@@ -385,32 +369,32 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 8,
     elevation: 5,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
     marginBottom: 16,
     textAlign: "center",
   },
   description: {
     fontSize: 16,
-    color: "rgba(255,255,255,0.9)",
+    color: theme.textOnPrimary,
     textAlign: "center",
     marginBottom: 12,
   },
   emailContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
@@ -420,11 +404,11 @@ const styles = StyleSheet.create({
   emailText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#2563EB",
+    color: theme.primary,
   },
   instructions: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textOnPrimary,
     textAlign: "center",
     marginBottom: 32,
   },
@@ -438,37 +422,37 @@ const styles = StyleSheet.create({
   codeInput: {
     width: 50,
     height: 60,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     borderRadius: 12,
     fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
-    color: "#1F2937",
+    color: theme.text,
     borderWidth: 2,
     borderColor: "transparent",
-    shadowColor: "#000",
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 4,
     elevation: 3,
   },
   codeInputFilled: {
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
+    borderColor: theme.primary,
+    backgroundColor: theme.infoLight,
   },
   verifyButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#10B981",
+    backgroundColor: theme.success,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
     gap: 8,
     width: "100%",
-    shadowColor: "#000",
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 4,
     elevation: 3,
     marginBottom: 16,
@@ -479,13 +463,13 @@ const styles = StyleSheet.create({
   verifyButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: theme.textOnPrimary,
   },
   resendButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.backgroundCard,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -498,21 +482,21 @@ const styles = StyleSheet.create({
   resendButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#2563EB",
+    color: theme.primary,
   },
   resendButtonTextDisabled: {
-    color: "#9CA3AF",
+    color: theme.textLight,
   },
   tipsContainer: {
     width: "100%",
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: theme.backgroundCard, // Changed to backgroundCard
     padding: 20,
     borderRadius: 12,
   },
   tipsTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: theme.text, // Changed to theme.text
     marginBottom: 12,
   },
   tipItem: {
@@ -522,12 +506,12 @@ const styles = StyleSheet.create({
   },
   tipBullet: {
     fontSize: 16,
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textSecondary, // Changed to theme.textSecondary
     marginRight: 8,
   },
   tipText: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    color: theme.textSecondary, // Changed to theme.textSecondary
     flex: 1,
   },
 });

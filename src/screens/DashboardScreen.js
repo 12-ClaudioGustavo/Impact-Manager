@@ -14,8 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 const DashboardScreen = () => {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('');
@@ -34,18 +38,15 @@ const DashboardScreen = () => {
       
       if (!session) return;
 
-      // Set greeting
       const hour = new Date().getHours();
       if (hour >= 5 && hour < 12) setGreeting('Bom dia');
       else if (hour >= 12 && hour < 18) setGreeting('Boa tarde');
       else setGreeting('Boa noite');
 
-      // 1. Get User Name from Session Metadata (Primary Source)
       if (session.user.user_metadata?.full_name) {
          setUserName(session.user.user_metadata.full_name.split(' ')[0]);
       }
 
-      // 2. Try to fetch User & Org ID from DB (Secondary Source)
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('full_name, organization_id')
@@ -54,14 +55,11 @@ const DashboardScreen = () => {
 
       if (userError) {
         console.log('Note: Could not fetch public user profile (likely RLS or not created yet). Using session data.');
-        // Não redirecionamos mais aqui, pois temos os dados da sessão para mostrar a tela
       } else if (userData) {
-        // Se tiver dados no banco, atualizamos/sobrescrevemos
         if (userData.full_name) setUserName(userData.full_name.split(' ')[0]);
         
         const orgId = userData.organization_id;
         if (orgId) {
-           // Fetch Org Name separately
            const { data: orgData } = await supabase
              .from('organizations')
              .select('name')
@@ -84,14 +82,12 @@ const DashboardScreen = () => {
 
   const fetchDashboardStats = async (orgId) => {
     try {
-      // Parallel requests for stats
       const [membersCount, donationsSum, eventsCount] = await Promise.all([
         supabase.from('members').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
         supabase.from('donations').select('amount').eq('organization_id', orgId),
         supabase.from('events').select('id', { count: 'exact', head: true }).eq('organization_id', orgId)
       ]);
 
-      // Calculate total donations
       const totalDonations = donationsSum.data?.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) || 0;
 
       setStats({
@@ -100,14 +96,12 @@ const DashboardScreen = () => {
         events: eventsCount.count || 0
       });
 
-      // Fetch recent activities (Members + Donations + Events)
       const [recentMembers, recentDonations, recentEvents] = await Promise.all([
         supabase.from('members').select('full_name, created_at').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(3),
         supabase.from('donations').select('donor_name, amount, created_at').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(3),
         supabase.from('events').select('title, start_date, created_at').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(3)
       ]);
 
-      // Normalize and combine activities
       const newActivities = [
         ...(recentMembers.data || []).map(m => ({
           type: 'member',
@@ -115,7 +109,7 @@ const DashboardScreen = () => {
           description: m.full_name,
           date: new Date(m.created_at),
           icon: 'person-add',
-          color: '#2563EB'
+          color: theme.primary
         })),
         ...(recentDonations.data || []).map(d => ({
           type: 'donation',
@@ -123,7 +117,7 @@ const DashboardScreen = () => {
           description: `R$ ${Number(d.amount).toFixed(2)}`,
           date: new Date(d.created_at),
           icon: 'cash',
-          color: '#10B981'
+          color: theme.success
         })),
         ...(recentEvents.data || []).map(e => ({
           type: 'event',
@@ -131,11 +125,11 @@ const DashboardScreen = () => {
           description: e.title,
           date: new Date(e.created_at),
           icon: 'calendar',
-          color: '#F59E0B'
+          color: theme.warning
         }))
       ]
       .sort((a, b) => b.date - a.date)
-      .slice(0, 5); // Take top 5
+      .slice(0, 5);
 
       setActivities(newActivities);
 
@@ -171,6 +165,28 @@ const DashboardScreen = () => {
     fetchUserData();
   }, []);
 
+  const QuickActionCard = ({ icon, title, color }) => (
+    <TouchableOpacity style={styles.actionCard} activeOpacity={0.7}>
+      <View style={[styles.actionIconContainer, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon} size={24} color={color} />
+      </View>
+      <Text style={styles.actionTitle}>{title}</Text>
+    </TouchableOpacity>
+  );
+  
+  const ActivityItem = ({ icon, title, description, time, iconColor }) => (
+    <View style={styles.activityItem}>
+      <View style={[styles.activityIconContainer, { backgroundColor: iconColor + '20' }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={styles.activityContent}>
+        <Text style={styles.activityTitle}>{title}</Text>
+        <Text style={styles.activityDescription}>{description}</Text>
+        <Text style={styles.activityTime}>{time}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -178,13 +194,12 @@ const DashboardScreen = () => {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh}
-            tintColor="#FFFFFF"
-            colors={['#2563EB']} 
+            tintColor={theme.textOnPrimary}
+            colors={[theme.primary]} 
           />
         }
       >
-        {/* Header */}
-        <LinearGradient colors={['#2563EB', '#1E40AF']} style={styles.header}>
+        <LinearGradient colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]} style={styles.header}>
           <View style={styles.headerTop}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Image 
@@ -203,47 +218,44 @@ const DashboardScreen = () => {
             </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+                <Ionicons name="notifications-outline" size={24} color={theme.textOnPrimary} />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Quick Stats */}
           <View style={styles.statsContainer}>
             <View style={[styles.statCard, styles.statCardFirst]}>
-              <Ionicons name="people" size={24} color="#FFFFFF" />
+              <Ionicons name="people" size={24} color={theme.textOnPrimary} />
               <Text style={styles.statNumber}>{stats.members}</Text>
               <Text style={styles.statLabel}>Membros</Text>
             </View>
             <View style={[styles.statCard, styles.statCardMiddle]}>
-              <Ionicons name="heart" size={24} color="#FFFFFF" />
+              <Ionicons name="heart" size={24} color={theme.textOnPrimary} />
               <Text style={styles.statNumber}>{formatCurrency(stats.donations)}</Text>
               <Text style={styles.statLabel}>Doações</Text>
             </View>
             <View style={[styles.statCard, styles.statCardLast]}>
-              <Ionicons name="calendar" size={24} color="#FFFFFF" />
+              <Ionicons name="calendar" size={24} color={theme.textOnPrimary} />
               <Text style={styles.statNumber}>{stats.events}</Text>
               <Text style={styles.statLabel}>Eventos</Text>
             </View>
           </View>
         </LinearGradient>
 
-        {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ações Rápidas</Text>
           <View style={styles.actionsContainer}>
-            <QuickActionCard icon="person-add" title="Novo Membro" color="#2563EB" />
-            <QuickActionCard icon="cash" title="Registrar Doação" color="#10B981" />
-            <QuickActionCard icon="calendar-sharp" title="Criar Evento" color="#F59E0B" />
-            <QuickActionCard icon="document-text" title="Relatórios" color="#8B5CF6" />
+            <QuickActionCard icon="person-add" title="Novo Membro" color={theme.primary} />
+            <QuickActionCard icon="cash" title="Registrar Doação" color={theme.success} />
+            <QuickActionCard icon="calendar-sharp" title="Criar Evento" color={theme.warning} />
+            <QuickActionCard icon="document-text" title="Relatórios" color={theme.info} />
           </View>
         </View>
 
-        {/* Recent Activity */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Atividades Recentes</Text>
           {activities.length === 0 ? (
-            <Text style={{ color: '#6B7280', fontStyle: 'italic' }}>Nenhuma atividade recente.</Text>
+            <Text style={styles.noActivityText}>Nenhuma atividade recente.</Text>
           ) : (
             activities.map((item, index) => (
               <ActivityItem
@@ -262,32 +274,10 @@ const DashboardScreen = () => {
   );
 };
 
-const QuickActionCard = ({ icon, title, color }) => (
-  <TouchableOpacity style={styles.actionCard} activeOpacity={0.7}>
-    <View style={[styles.actionIconContainer, { backgroundColor: color + '20' }]}>
-      <Ionicons name={icon} size={24} color={color} />
-    </View>
-    <Text style={styles.actionTitle}>{title}</Text>
-  </TouchableOpacity>
-);
-
-const ActivityItem = ({ icon, title, description, time, iconColor }) => (
-  <View style={styles.activityItem}>
-    <View style={[styles.activityIconContainer, { backgroundColor: iconColor + '20' }]}>
-      <Ionicons name={icon} size={20} color={iconColor} />
-    </View>
-    <View style={styles.activityContent}>
-      <Text style={styles.activityTitle}>{title}</Text>
-      <Text style={styles.activityDescription}>{description}</Text>
-      <Text style={styles.activityTime}>{time}</Text>
-    </View>
-  </View>
-);
-
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.background,
   },
   header: {
     paddingHorizontal: 24,
@@ -303,12 +293,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   headerTitle: {
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
     fontSize: 24,
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#DBEAFE',
+    color: theme.textOnPrimary,
     fontSize: 14,
     marginTop: 4,
   },
@@ -337,13 +327,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   statNumber: {
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 8,
   },
   statLabel: {
-    color: '#DBEAFE',
+    color: theme.textOnPrimary,
     fontSize: 12,
   },
   section: {
@@ -352,7 +342,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    color: '#1F2937',
+    color: theme.text,
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
@@ -363,14 +353,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   actionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.backgroundCard,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     width: '48%',
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -383,20 +373,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   actionTitle: {
-    color: '#1F2937',
+    color: theme.text,
     fontWeight: '600',
     fontSize: 14,
   },
   activityItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.backgroundCard,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -412,20 +402,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityTitle: {
-    color: '#1F2937',
+    color: theme.text,
     fontWeight: '600',
     fontSize: 16,
   },
   activityDescription: {
-    color: '#6B7280',
+    color: theme.textSecondary,
     fontSize: 14,
     marginTop: 4,
   },
   activityTime: {
-    color: '#9CA3AF',
+    color: theme.textLight,
     fontSize: 12,
     marginTop: 4,
   },
+  noActivityText: {
+    color: theme.textSecondary,
+    fontStyle: 'italic',
+  }
 });
 
 export default DashboardScreen;

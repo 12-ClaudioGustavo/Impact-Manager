@@ -6,21 +6,23 @@ import {
   SafeAreaView,
   StyleSheet,
   Image,
-  ScrollView,
   Animated,
   Dimensions,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const WelcomeScreen = ({ navigation }) => {
+  const { theme, isDarkMode } = useTheme();
+  const styles = getStyles(theme);
+
   const arrowAnim = useRef(new Animated.Value(0)).current;
 
   const handleStartPress = () => {
-    // Animação de "vai e volta" na seta
     Animated.sequence([
       Animated.timing(arrowAnim, {
         toValue: 10,
@@ -41,16 +43,27 @@ const WelcomeScreen = ({ navigation }) => {
     transform: [{ translateX: arrowAnim }],
   };
 
+  const FeatureCard = ({ icon, title, desc }) => (
+    <View style={styles.featureCard}>
+      <View style={styles.iconCircle}>
+        <Ionicons name={icon} size={24} color={theme.textOnPrimary} />
+      </View>
+      <View style={styles.featureTextContainer}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDesc}>{desc}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <LinearGradient
-      colors={['#2563EB', '#1E40AF']} // Cores da Dashboard (Blue)
+      colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
-          {/* Header / Logo Section */}
           <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
               <Image
@@ -65,7 +78,6 @@ const WelcomeScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          {/* Features Cards */}
           <View style={styles.featuresContainer}>
             <FeatureCard
               icon="people-outline"
@@ -84,7 +96,6 @@ const WelcomeScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.footerSection}>
             <TouchableOpacity
               onPress={handleStartPress}
@@ -93,7 +104,7 @@ const WelcomeScreen = ({ navigation }) => {
             >
               <Text style={styles.primaryButtonText}>Comece agora</Text>
               <Animated.View style={animatedArrowStyle}>
-                <Ionicons name="arrow-forward" size={24} color="#FFF" />
+                <Ionicons name="arrow-forward" size={24} color={theme.primary} />
               </Animated.View>
             </TouchableOpacity>
 
@@ -105,7 +116,7 @@ const WelcomeScreen = ({ navigation }) => {
               <Ionicons
                 name="log-in-outline"
                 size={24}
-                color="#FFF"
+                color={theme.textOnPrimary}
                 style={{ marginRight: 8 }}
               />
               <Text style={styles.secondaryButtonText}>Já tenho conta</Text>
@@ -117,49 +128,33 @@ const WelcomeScreen = ({ navigation }) => {
   );
 };
 
-const FeatureCard = ({ icon, title, desc }) => (
-  <View style={styles.featureCard}>
-    <View style={styles.iconCircle}>
-      <Ionicons name={icon} size={24} color="#FFFFFF" />
-    </View>
-    <View style={styles.featureTextContainer}>
-      <Text style={styles.featureTitle}>{title}</Text>
-      <Text style={styles.featureDesc}>{desc}</Text>
-    </View>
-  </View>
-);
-
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
   },
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    // Removed
-  },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'space-between',
-    paddingVertical: 20, // Add padding to avoid edge collisions
+    paddingVertical: 20,
   },
   headerSection: {
     alignItems: 'center',
     marginTop: 20,
-    // Removed marginBottom to let flex distribution handle spacing
   },
   logoContainer: {
     width: 120,
     height: 120,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)', // Static for transparent effect
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.2)', // Static for transparent effect
   },
   logo: {
     width: 90,
@@ -168,37 +163,37 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
     letterSpacing: 0.5,
     marginBottom: 8,
     textAlign: 'center',
   },
   tagline: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    color: theme.textOnPrimary,
     textAlign: 'center',
     maxWidth: '80%',
     lineHeight: 24,
   },
   featuresContainer: {
-    justifyContent: 'center', // Center vertically
+    justifyContent: 'center',
     gap: 16,
-    flex: 1, // Allow it to take available space
+    flex: 1,
   },
   featureCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)', // Static for transparent effect
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.05)', // Static for transparent effect
   },
   iconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.1)', // Static for transparent effect
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -209,12 +204,12 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
     marginBottom: 4,
   },
   featureDesc: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: theme.textOnPrimary,
   },
   footerSection: {
     gap: 16,
@@ -222,24 +217,24 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF', // White button
+    backgroundColor: theme.backgroundCard,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.shadow,
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: theme.shadowOpacity,
     shadowRadius: 4.65,
     elevation: 8,
   },
   primaryButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2563EB', // Blue text
+    color: theme.primary,
     marginRight: 8,
   },
   secondaryButton: {
@@ -249,13 +244,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.3)', // Static for transparent effect
+    backgroundColor: 'rgba(255,255,255,0.05)', // Static for transparent effect
   },
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
   },
 });
 
