@@ -29,7 +29,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-localization"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3c7f522b-1f26-459e-b302-4ac2ce1b020e"
+      }
+    },
+    "owner": "claudiogustavo"
   }
 }

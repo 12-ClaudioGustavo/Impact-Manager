@@ -1,63 +1,41 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
   StyleSheet,
-  Dimensions,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
   Animated,
-  Image,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "../lib/supabase";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
-
-const { width } = Dimensions.get("window");
+import { supabase } from '../lib/supabase';
+import Input from '../components/common/Input';
+import Button from '../components/common/Button';
 
 const RegisterScreen = ({ navigation }) => {
-  const { theme, isDarkMode } = useTheme();
+  const { theme } = useTheme();
   const styles = getStyles(theme);
 
   const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({
+    organizationName: '',
+    fullName: '',
+    email: '',
+    password: '',
+  });
+  const [loading, setLoading] = useState(false);
+
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const [formData, setFormData] = useState({
-    organizationName: "",
-    fullName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-
   const updateFormData = (key, value) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const nextStep = () => {
-    if (step === 1 && !formData.organizationName) {
-      Alert.alert("Atenção", "Por favor, informe o nome da organização.");
-      return;
-    }
-    if (step === 2 && !formData.fullName) {
-      Alert.alert("Atenção", "Por favor, informe seu nome completo.");
-      return;
-    }
-
-    animateStepChange(() => setStep(step + 1));
-  };
-
-  const prevStep = () => {
-    animateStepChange(() => setStep(step - 1));
+    setFormData(prev => ({ ...prev, [key]: value }));
   };
 
   const animateStepChange = (callback) => {
@@ -68,13 +46,13 @@ const RegisterScreen = ({ navigation }) => {
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
-        toValue: -50,
+        toValue: -30,
         duration: 200,
         useNativeDriver: true,
       }),
     ]).start(() => {
       callback();
-      slideAnim.setValue(50);
+      slideAnim.setValue(30);
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -90,156 +68,100 @@ const RegisterScreen = ({ navigation }) => {
     });
   };
 
-  const validateForm = () => {
-    const { email, password, confirmPassword } = formData;
+  const nextStep = () => {
+    if (step === 1 && !formData.organizationName.trim()) {
+      Alert.alert('Campo Obrigatório', 'Por favor, informe o nome da organização.');
+      return;
+    }
+    if (step === 2 && !formData.fullName.trim()) {
+      Alert.alert('Campo Obrigatório', 'Por favor, informe o seu nome completo.');
+      return;
+    }
+    animateStepChange(() => setStep(step + 1));
+  };
 
-    if (!email || !password || !confirmPassword) {
-      Alert.alert("Erro", "Por favor, preencha todos os campos");
-      return false;
+  const prevStep = () => {
+    animateStepChange(() => setStep(step - 1));
+  };
+
+  const handleSignUp = async () => {
+    const { organizationName, fullName, email, password } = formData;
+
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Campos Vazios', 'Por favor, preencha o e-mail e a palavra-passe.');
+      return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres");
-      return false;
+      Alert.alert('Palavra-passe Fraca', 'A palavra-passe deve ter pelo menos 6 caracteres.');
+      return;
     }
-
-    if (password !== confirmPassword) {
-      Alert.alert("Erro", "As senhas não coincidem");
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert("Erro", "Por favor, insira um e-mail válido");
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleRegister = async () => {
-    if (!validateForm()) return;
 
     setLoading(true);
 
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
+        email: email.trim().toLowerCase(),
+        password: password,
         options: {
           data: {
-            full_name: formData.fullName.trim(),
+            full_name: fullName.trim(),
           },
-          emailRedirectTo: undefined,
         },
       });
 
       if (authError) {
-        Alert.alert("Erro ao criar conta", authError.message);
+        Alert.alert('Erro ao Criar Conta', authError.message);
         return;
       }
 
       if (!authData?.user?.id) {
-        Alert.alert("Erro", "Não foi possível criar a conta de autenticação.");
+        Alert.alert('Erro', 'Não foi possível criar a conta de autenticação.');
         return;
       }
 
       const { data: orgData, error: orgError } = await supabase
-        .from("organizations")
+        .from('organizations')
         .insert([
           {
-            name: formData.organizationName.trim(),
-            email: formData.email.trim().toLowerCase(),
-            status: "active",
-            subscription_plan: "free",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            name: organizationName.trim(),
+            email: email.trim().toLowerCase(),
+            status: 'active',
+            subscription_plan: 'free',
           },
         ])
         .select()
         .single();
 
       if (orgError) {
-        Alert.alert(
-          "Erro ao criar organização",
-          orgError.message ||
-            "Não foi possível criar a organização. Verifique as permissões no Supabase.",
-        );
-        await supabase.auth.admin
-          .deleteUser(authData.user.id)
-          .catch(console.error);
+        Alert.alert('Erro ao Criar Organização', orgError.message);
+        await supabase.auth.admin.deleteUser(authData.user.id).catch(console.error);
         return;
       }
 
-      if (!orgData?.id) {
-        Alert.alert("Erro", "Organização criada mas ID não retornado.");
-        return;
-      }
-
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .insert([
-          {
-            auth_id: authData.user.id,
-            organization_id: orgData.id,
-            full_name: formData.fullName.trim(),
-            email: formData.email.trim().toLowerCase(),
-            role: "admin",
-            status: "active",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
+      const { error: userError } = await supabase.from('users').insert([
+        {
+          auth_id: authData.user.id,
+          organization_id: orgData.id,
+          full_name: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          role: 'admin',
+          status: 'active',
+        },
+      ]);
 
       if (userError) {
-        Alert.alert(
-          "Erro ao criar perfil",
-          userError.message ||
-            "Não foi possível criar o perfil de usuário. Verifique as permissões no Supabase.",
-        );
-        await supabase
-          .from("organizations")
-          .delete()
-          .eq("id", orgData.id)
-          .catch(console.error);
-        await supabase.auth.admin
-          .deleteUser(authData.user.id)
-          .catch(console.error);
+        Alert.alert('Erro ao Criar Perfil', userError.message);
+        await supabase.from('organizations').delete().eq('id', orgData.id).catch(console.error);
+        await supabase.auth.admin.deleteUser(authData.user.id).catch(console.error);
         return;
       }
 
-      const { data: codeData, error: codeError } = await supabase.rpc(
-        "generate_verification_code",
-        {
-          p_user_id: authData.user.id,
-          p_email: formData.email.trim().toLowerCase(),
-        },
-      );
-
-      if (codeError) {
-        Alert.alert(
-          "Aviso",
-          "Conta criada, mas não foi possível gerar o código de verificação. Você pode solicitar um novo código na tela de login.",
-        );
-      }
-
-      navigation.navigate("EmailVerification", {
-        email: formData.email.trim().toLowerCase(),
-      });
-
-      Alert.alert(
-        "Conta Criada!",
-        "Enviamos um código de verificação de 6 dígitos para seu email.",
-        [{ text: "OK" }],
-      );
+      navigation.navigate('EmailVerification', { email: email.trim().toLowerCase() });
+      Alert.alert('Conta Criada!', 'Enviamos um código de verificação para o seu e-mail.');
     } catch (error) {
-      console.error("❌ Erro geral no registro:", error);
-      Alert.alert(
-        "Erro",
-        "Ocorreu um erro inesperado ao criar sua conta. Por favor, tente novamente.",
-      );
+      console.error('Erro ao criar conta:', error);
+      Alert.alert('Erro', 'Ocorreu um erro inesperado. Por favor, tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -250,95 +172,50 @@ const RegisterScreen = ({ navigation }) => {
       case 1:
         return (
           <>
-            <Text style={styles.stepTitle}>
-              Qual o nome da sua organização?
-            </Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="business-outline" size={20} color={theme.iconColorLight} />
-              <TextInput
-                style={styles.input}
-                placeholder="Ex: ONG Esperança"
-                placeholderTextColor={theme.inputPlaceholder}
-                value={formData.organizationName}
-                onChangeText={(text) =>
-                  updateFormData("organizationName", text)
-                }
-                autoFocus
-              />
-            </View>
+            <Text style={styles.stepTitle}>Qual o nome da sua organização?</Text>
+            <Input
+              value={formData.organizationName}
+              onChangeText={(text) => updateFormData('organizationName', text)}
+              placeholder="Ex: ONG Esperança"
+              icon="business-outline"
+              autoFocus
+            />
           </>
         );
       case 2:
         return (
           <>
             <Text style={styles.stepTitle}>Como devemos te chamar?</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color={theme.iconColorLight} />
-              <TextInput
-                style={styles.input}
-                placeholder="Seu nome completo"
-                placeholderTextColor={theme.inputPlaceholder}
-                value={formData.fullName}
-                onChangeText={(text) => updateFormData("fullName", text)}
-                autoFocus
-              />
-            </View>
+            <Input
+              value={formData.fullName}
+              onChangeText={(text) => updateFormData('fullName', text)}
+              placeholder="O seu nome completo"
+              icon="person-outline"
+              autoFocus
+            />
           </>
         );
       case 3:
         return (
           <>
             <Text style={styles.stepTitle}>Dados de acesso</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color={theme.iconColorLight} />
-              <TextInput
-                style={styles.input}
-                placeholder="seu@email.com"
-                placeholderTextColor={theme.inputPlaceholder}
-                value={formData.email}
-                onChangeText={(text) => updateFormData("email", text)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-            <View style={[styles.inputContainer, { marginTop: 16 }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={theme.iconColorLight} />
-              <TextInput
-                style={styles.input}
-                placeholder="Senha (mín. 6 caracteres)"
-                placeholderTextColor={theme.inputPlaceholder}
-                value={formData.password}
-                onChangeText={(text) => updateFormData("password", text)}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={20}
-                  color={theme.iconColorLight}
-                />
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.inputContainer, { marginTop: 16 }]}>
-              <Ionicons name="lock-closed-outline" size={20} color={theme.iconColorLight} />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirme a senha"
-                placeholderTextColor={theme.inputPlaceholder}
-                value={formData.confirmPassword}
-                onChangeText={(text) => updateFormData("confirmPassword", text)}
-                secureTextEntry={!showConfirmPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                <Ionicons
-                  name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
-                  size={20}
-                  color={theme.iconColorLight}
-                />
-              </TouchableOpacity>
-            </View>
+            <Input
+              label="E-mail"
+              value={formData.email}
+              onChangeText={(text) => updateFormData('email', text)}
+              placeholder="seu.email@exemplo.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              icon="mail-outline"
+            />
+            <Input
+              label="Palavra-passe"
+              value={formData.password}
+              onChangeText={(text) => updateFormData('password', text)}
+              placeholder="Mínimo 6 caracteres"
+              secureTextEntry
+              icon="lock-closed-outline"
+            />
           </>
         );
       default:
@@ -347,38 +224,23 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient
-      colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.content}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.textOnPrimary} />
-          </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <LinearGradient colors={[theme.primary, theme.primaryDark]} style={styles.header}>
+            <Ionicons name="person-add-outline" size={64} color="white" />
+            <Text style={styles.headerTitle}>Crie a Sua Conta</Text>
+            <Text style={styles.headerSubtitle}>Comece a gerir o seu impacto hoje.</Text>
+            
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressBar, { width: `${(step / 3) * 100}%` }]} />
+            </View>
+          </LinearGradient>
 
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Criar Conta</Text>
-            <Text style={styles.headerSubtitle}>
-              Junte-se a nós e comece a fazer a diferença.
-            </Text>
-          </View>
-
-          <View style={styles.progressContainer}>
-            <View
-              style={[styles.progressBar, { width: `${(step / 3) * 100}%`, backgroundColor: theme.warning }]}
-            />
-          </View>
-
-          <View style={styles.glassContainer}>
+          <View style={styles.formContainer}>
             <Animated.View
               style={{
                 opacity: fadeAnim,
@@ -390,204 +252,103 @@ const RegisterScreen = ({ navigation }) => {
 
             <View style={styles.navigationButtons}>
               {step > 1 && (
-                <TouchableOpacity
+                <Button
+                  title="Voltar"
                   onPress={prevStep}
-                  style={styles.navButtonSecondary}
-                >
-                  <Text style={styles.navButtonTextSecondary}>Voltar</Text>
-                </TouchableOpacity>
+                  variant="outline"
+                  style={{ flex: 1 }}
+                />
               )}
+              <Button
+                title={step < 3 ? 'Próximo' : 'Criar Conta'}
+                onPress={step < 3 ? nextStep : handleSignUp}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
+            </View>
 
-              <TouchableOpacity
-                onPress={step < 3 ? nextStep : handleRegister}
-                style={[styles.navButtonPrimary, step === 1 && { flex: 1 }]}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={theme.primaryDark} />
-                ) : (
-                  <Text style={styles.navButtonTextPrimary}>
-                    {step < 3 ? "Próximo" : "Cadastro"}
-                  </Text>
-                )}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Já tem uma conta?</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.footerLink}> Iniciar Sessão</Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          <View style={styles.socialContainer}>
-            <Text style={styles.socialText}>Ou registre-se com</Text>
-            <View style={styles.socialButtons}>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-google" size={24} color={theme.error} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}>
-                <Ionicons name="logo-apple" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Login")}
-            style={styles.loginLinkContainer}
-          >
-            <Text style={styles.loginLinkText}>
-              Já tem uma conta? <Text style={styles.loginLinkBold}>Entrar</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 50,
-    justifyContent: "space-between",
-    paddingBottom: 30,
-  },
-  backButton: {
-    marginBottom: 20,
-    alignSelf: "flex-start",
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    padding: 8,
-    borderRadius: 12,
-  },
-  headerTitleContainer: {
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: theme.textOnPrimary,
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: theme.textOnPrimary,
-  },
-  progressContainer: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)', // Static for transparent effect
-    borderRadius: 3,
-    marginBottom: 30,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-  },
-  glassContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Static for glass effect
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)', // Static for glass effect
-    marginBottom: 20,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: theme.shadowOpacity,
-    shadowRadius: 20,
-  },
-  stepTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: theme.textOnPrimary,
-    marginBottom: 20,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.inputBackground,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  input: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: theme.text,
-  },
-  navigationButtons: {
-    flexDirection: "row",
-    marginTop: 30,
-    gap: 12,
-  },
-  navButtonPrimary: {
-    flex: 1,
-    backgroundColor: theme.backgroundCard,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  navButtonTextPrimary: {
-    color: theme.primary,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  navButtonSecondary: {
-    flex: 1,
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)', // Static for transparent effect
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  navButtonTextSecondary: {
-    color: theme.textOnPrimary,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  socialContainer: {
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  socialText: {
-    color: theme.textOnPrimary,
-    marginBottom: 16,
-    fontSize: 14,
-  },
-  socialButtons: {
-    flexDirection: "row",
-    gap: 20,
-  },
-  socialButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: theme.backgroundCard,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: theme.shadowOpacity,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  loginLinkContainer: {
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  loginLinkText: {
-    color: theme.textOnPrimary,
-    fontSize: 15,
-  },
-  loginLinkBold: {
-    fontWeight: "bold",
-    color: theme.warning,
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    scrollContainer: {
+      flexGrow: 1,
+    },
+    header: {
+      alignItems: 'center',
+      paddingVertical: 40,
+      paddingHorizontal: 20,
+      borderBottomLeftRadius: 30,
+      borderBottomRightRadius: 30,
+    },
+    headerTitle: {
+      color: 'white',
+      fontSize: 28,
+      fontWeight: 'bold',
+      marginTop: 16,
+    },
+    headerSubtitle: {
+      color: 'rgba(255, 255, 255, 0.8)',
+      fontSize: 16,
+      marginTop: 4,
+    },
+    progressContainer: {
+      width: '100%',
+      height: 4,
+      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+      borderRadius: 2,
+      marginTop: 24,
+      overflow: 'hidden',
+    },
+    progressBar: {
+      height: '100%',
+      backgroundColor: 'white',
+      borderRadius: 2,
+    },
+    formContainer: {
+      padding: 24,
+      gap: 16,
+    },
+    stepTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: theme.text,
+      marginBottom: 16,
+    },
+    navigationButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 20,
+    },
+    footerText: {
+      color: theme.textSecondary,
+      fontSize: 14,
+    },
+    footerLink: {
+      color: theme.primary,
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+  });
 
 export default RegisterScreen;

@@ -1,22 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  Image
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert, Image, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import AdBanner from '../components/AdBanner';
 
-const DashboardScreen = () => {
+const { width } = Dimensions.get('window');
+
+const DashboardScreen = ({ navigation }) => {
   const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
 
@@ -28,9 +21,15 @@ const DashboardScreen = () => {
   const [stats, setStats] = useState({
     members: 0,
     donations: 0,
-    events: 0
+    events: 0,
+    upcomingEvents: 0
   });
   const [activities, setActivities] = useState([]);
+  const [quickInsights, setQuickInsights] = useState({
+    thisMonth: 0,
+    lastMonth: 0,
+    percentageChange: 0
+  });
 
   const fetchUserData = async () => {
     try {
@@ -54,7 +53,7 @@ const DashboardScreen = () => {
         .single();
 
       if (userError) {
-        console.log('Note: Could not fetch public user profile (likely RLS or not created yet). Using session data.');
+        console.log('Note: Could not fetch public user profile');
       } else if (userData) {
         if (userData.full_name) setUserName(userData.full_name.split(' ')[0]);
         
@@ -82,18 +81,39 @@ const DashboardScreen = () => {
 
   const fetchDashboardStats = async (orgId) => {
     try {
-      const [membersCount, donationsSum, eventsCount] = await Promise.all([
+      const now = new Date();
+      const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      const [membersCount, donationsSum, eventsCount, upcomingEventsCount, donationsThisMonth, donationsLastMonth] = await Promise.all([
         supabase.from('members').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
         supabase.from('donations').select('amount').eq('organization_id', orgId),
-        supabase.from('events').select('id', { count: 'exact', head: true }).eq('organization_id', orgId)
+        supabase.from('events').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+        supabase.from('events').select('id', { count: 'exact', head: true }).eq('organization_id', orgId).gte('start_date', now.toISOString()),
+        supabase.from('donations').select('amount').eq('organization_id', orgId).gte('created_at', firstDayThisMonth.toISOString()),
+        supabase.from('donations').select('amount').eq('organization_id', orgId).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString())
       ]);
 
       const totalDonations = donationsSum.data?.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) || 0;
+      const thisMonthTotal = donationsThisMonth.data?.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) || 0;
+      const lastMonthTotal = donationsLastMonth.data?.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) || 0;
+      
+      const percentageChange = lastMonthTotal > 0 
+        ? ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100 
+        : thisMonthTotal > 0 ? 100 : 0;
 
       setStats({
         members: membersCount.count || 0,
         donations: totalDonations,
-        events: eventsCount.count || 0
+        events: eventsCount.count || 0,
+        upcomingEvents: upcomingEventsCount.count || 0
+      });
+
+      setQuickInsights({
+        thisMonth: thisMonthTotal,
+        lastMonth: lastMonthTotal,
+        percentageChange: percentageChange
       });
 
       const [recentMembers, recentDonations, recentEvents] = await Promise.all([
@@ -114,7 +134,7 @@ const DashboardScreen = () => {
         ...(recentDonations.data || []).map(d => ({
           type: 'donation',
           title: 'Doação recebida',
-          description: `R$ ${Number(d.amount).toFixed(2)}`,
+          description: `${d.donor_name} • ${formatCurrency(Number(d.amount))}`,
           date: new Date(d.created_at),
           icon: 'cash',
           color: theme.success
@@ -129,7 +149,7 @@ const DashboardScreen = () => {
         }))
       ]
       .sort((a, b) => b.date - a.date)
-      .slice(0, 5);
+      .slice(0, 6);
 
       setActivities(newActivities);
 
@@ -139,10 +159,11 @@ const DashboardScreen = () => {
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
+    return new Intl.NumberFormat('pt-AO', {
       style: 'currency',
       currency: 'AOA',
-      notation: value > 10000 ? 'compact' : 'standard'
+      notation: value > 10000 ? 'compact' : 'standard',
+      maximumFractionDigits: 0
     }).format(value);
   };
 
@@ -153,7 +174,10 @@ const DashboardScreen = () => {
     if (minutes < 60) return `${minutes} min atrás`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours} h atrás`;
-    return `${Math.floor(hours / 24)} dias atrás`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Ontem';
+    if (days < 7) return `${days} dias atrás`;
+    return date.toLocaleDateString('pt-AO');
   };
 
   useEffect(() => {
@@ -165,46 +189,81 @@ const DashboardScreen = () => {
     fetchUserData();
   }, []);
 
-  const QuickActionCard = ({ icon, title, color }) => (
-    <TouchableOpacity style={styles.actionCard} activeOpacity={0.7}>
+  const StatCard = ({ icon, value, label, trend, color }) => (
+    <View style={[styles.statCard, { borderLeftColor: color, borderLeftWidth: 4 }]}>
+      <View style={styles.statHeader}>
+        <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
+          <Ionicons name={icon} size={24} color={color} />
+        </View>
+        {trend !== undefined && (
+          <View style={[styles.trendBadge, { backgroundColor: trend >= 0 ? theme.success + '20' : theme.error + '20' }]}>
+            <Ionicons 
+              name={trend >= 0 ? 'trending-up' : 'trending-down'} 
+              size={14} 
+              color={trend >= 0 ? theme.success : theme.error} 
+            />
+            <Text style={[styles.trendText, { color: trend >= 0 ? theme.success : theme.error }]}>
+              {Math.abs(trend).toFixed(0)}%
+            </Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+
+  const QuickActionCard = ({ icon, title, color, onPress, badge }) => (
+    <TouchableOpacity style={styles.actionCard} activeOpacity={0.7} onPress={onPress}>
       <View style={[styles.actionIconContainer, { backgroundColor: color + '20' }]}>
         <Ionicons name={icon} size={24} color={color} />
+        {badge > 0 && (
+          <View style={styles.actionBadge}>
+            <Text style={styles.actionBadgeText}>{badge}</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.actionTitle}>{title}</Text>
     </TouchableOpacity>
   );
   
   const ActivityItem = ({ icon, title, description, time, iconColor }) => (
-    <View style={styles.activityItem}>
+    <TouchableOpacity style={styles.activityItem} activeOpacity={0.7}>
       <View style={[styles.activityIconContainer, { backgroundColor: iconColor + '20' }]}>
         <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <View style={styles.activityContent}>
         <Text style={styles.activityTitle}>{title}</Text>
-        <Text style={styles.activityDescription}>{description}</Text>
+        <Text style={styles.activityDescription} numberOfLines={1}>{description}</Text>
         <Text style={styles.activityTime}>{time}</Text>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.textLight} />
+    </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={onRefresh}
-            tintColor={theme.textOnPrimary}
+            tintColor={theme.primary}
             colors={[theme.primary]} 
           />
         }
       >
-        <LinearGradient colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]} style={styles.header}>
+        {/* Header */}
+        <LinearGradient 
+          colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]} 
+          style={styles.header}
+        >
           <View style={styles.headerTop}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Image 
                 source={require('../../assets/icon-removebg-preview.png')} 
-                style={{ width: 50, height: 50, marginRight: 12 }} 
+                style={styles.logo} 
                 resizeMode="contain"
               />
               <View>
@@ -216,46 +275,132 @@ const DashboardScreen = () => {
                 </Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="notifications-outline" size={24} color={theme.textOnPrimary} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Ionicons name="notifications-outline" size={24} color={theme.textOnPrimary} />
+              <View style={styles.notificationBadge} />
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.statsContainer}>
-            <View style={[styles.statCard, styles.statCardFirst]}>
-              <Ionicons name="people" size={24} color={theme.textOnPrimary} />
-              <Text style={styles.statNumber}>{stats.members}</Text>
-              <Text style={styles.statLabel}>Membros</Text>
+          {/* Insight Card */}
+          <View style={styles.insightCard}>
+            <View style={styles.insightHeader}>
+              <Ionicons name="trending-up" size={20} color={theme.textOnPrimary} />
+              <Text style={styles.insightTitle}>Doações este mês</Text>
             </View>
-            <View style={[styles.statCard, styles.statCardMiddle]}>
-              <Ionicons name="heart" size={24} color={theme.textOnPrimary} />
-              <Text style={styles.statNumber}>{formatCurrency(stats.donations)}</Text>
-              <Text style={styles.statLabel}>Doações</Text>
-            </View>
-            <View style={[styles.statCard, styles.statCardLast]}>
-              <Ionicons name="calendar" size={24} color={theme.textOnPrimary} />
-              <Text style={styles.statNumber}>{stats.events}</Text>
-              <Text style={styles.statLabel}>Eventos</Text>
+            <Text style={styles.insightValue}>{formatCurrency(quickInsights.thisMonth)}</Text>
+            <View style={styles.insightFooter}>
+              <Text style={styles.insightCompare}>
+                vs. {formatCurrency(quickInsights.lastMonth)} mês passado
+              </Text>
+              {quickInsights.percentageChange !== 0 && (
+                <View style={[styles.insightBadge, { 
+                  backgroundColor: quickInsights.percentageChange >= 0 ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)' 
+                }]}>
+                  <Ionicons 
+                    name={quickInsights.percentageChange >= 0 ? 'arrow-up' : 'arrow-down'} 
+                    size={12} 
+                    color={quickInsights.percentageChange >= 0 ? '#4CAF50' : '#F44336'} 
+                  />
+                  <Text style={[styles.insightBadgeText, { 
+                    color: quickInsights.percentageChange >= 0 ? '#4CAF50' : '#F44336' 
+                  }]}>
+                    {Math.abs(quickInsights.percentageChange).toFixed(1)}%
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </LinearGradient>
 
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <StatCard 
+            icon="people" 
+            value={stats.members} 
+            label="Membros" 
+            color={theme.primary}
+          />
+          <StatCard 
+            icon="heart" 
+            value={formatCurrency(stats.donations)} 
+            label="Total Arrecadado" 
+            color={theme.success}
+            trend={quickInsights.percentageChange}
+          />
+          <StatCard 
+            icon="calendar" 
+            value={stats.events} 
+            label="Eventos" 
+            color={theme.warning}
+          />
+          <StatCard 
+            icon="calendar-outline" 
+            value={stats.upcomingEvents} 
+            label="Próximos Eventos" 
+            color={theme.info}
+          />
+        </View>
+
+        {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+            <TouchableOpacity onPress={() => {}}>
+              <Text style={styles.seeAllText}>Ver tudo</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.actionsContainer}>
-            <QuickActionCard icon="person-add" title="Novo Membro" color={theme.primary} />
-            <QuickActionCard icon="cash" title="Registrar Doação" color={theme.success} />
-            <QuickActionCard icon="calendar-sharp" title="Criar Evento" color={theme.warning} />
-            <QuickActionCard icon="document-text" title="Relatórios" color={theme.info} />
+            <QuickActionCard 
+              icon="person-add" 
+              title="Novo Membro" 
+              color={theme.primary} 
+              onPress={() => navigation.navigate('Members', { screen: 'MembersList', params: { action: 'add' } })} 
+            />
+            <QuickActionCard 
+              icon="cash" 
+              title="Registrar Doação" 
+              color={theme.success} 
+              onPress={() => navigation.navigate('Donations', { screen: 'AddDonation' })} 
+            />
+            <QuickActionCard 
+              icon="calendar-sharp" 
+              title="Criar Evento" 
+              color={theme.warning} 
+              badge={stats.upcomingEvents}
+              onPress={() => navigation.navigate('Events', { screen: 'EventsList', params: { action: 'add' } })} 
+            />
+            <QuickActionCard 
+              icon="stats-chart" 
+              title="Relatórios" 
+              color={theme.info} 
+              onPress={() => Alert.alert("Em Breve", "A secção de relatórios está em desenvolvimento.")} 
+            />
           </View>
         </View>
 
+        {/* Recent Activity */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Atividades Recentes</Text>
-          {activities.length === 0 ? (
-            <Text style={styles.noActivityText}>Nenhuma atividade recente.</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Atividades Recentes</Text>
+            <TouchableOpacity onPress={() => {}}>
+              <Text style={styles.seeAllText}>Ver todas</Text>
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Carregando atividades...</Text>
+            </View>
+          ) : activities.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="documents-outline" size={48} color={theme.textLight} />
+              <Text style={styles.emptyStateTitle}>Nenhuma atividade recente</Text>
+              <Text style={styles.emptyStateText}>
+                Comece adicionando membros, registrando doações ou criando eventos
+              </Text>
+            </View>
           ) : (
             activities.map((item, index) => (
               <ActivityItem
@@ -269,6 +414,9 @@ const DashboardScreen = () => {
             ))
           )}
         </View>
+
+        <AdBanner />
+        <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -280,9 +428,9 @@ const getStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.background,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
@@ -290,7 +438,12 @@ const getStyles = (theme) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  logo: {
+    width: 50,
+    height: 50,
+    marginRight: 12,
   },
   headerTitle: {
     color: theme.textOnPrimary,
@@ -298,70 +451,157 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: theme.textOnPrimary,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
-    marginTop: 4,
+    marginTop: 2,
   },
   iconButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     padding: 12,
     borderRadius: 20,
+    position: 'relative',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  notificationBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.error,
   },
-  statCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  insightCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 16,
     padding: 16,
-    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  statCardFirst: {
-    marginRight: 8,
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  statCardMiddle: {
-    marginHorizontal: 4,
-  },
-  statCardLast: {
-    marginLeft: 8,
-  },
-  statNumber: {
+  insightTitle: {
     color: theme.textOnPrimary,
+    fontSize: 14,
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  insightValue: {
+    color: theme.textOnPrimary,
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  insightFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightCompare: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+  },
+  insightBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  insightBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  statCard: {
+    backgroundColor: theme.backgroundCard,
+    borderRadius: 16,
+    padding: 16,
+    width: (width - 52) / 2,
+    shadowColor: theme.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: theme.shadowOpacity,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  statIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
+  },
+  trendText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statValue: {
+    color: theme.text,
     fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 8,
+    marginBottom: 4,
   },
   statLabel: {
-    color: theme.textOnPrimary,
+    color: theme.textSecondary,
     fontSize: 12,
   },
   section: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     marginTop: 24,
-    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
     color: theme.text,
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16,
+  },
+  seeAllText: {
+    color: theme.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   actionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   actionCard: {
     backgroundColor: theme.backgroundCard,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
-    width: '48%',
+    width: (width - 52) / 2,
     shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: theme.shadowOpacity,
-    shadowRadius: 2,
+    shadowRadius: 4,
     elevation: 2,
   },
   actionIconContainer: {
@@ -371,11 +611,30 @@ const getStyles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
+    position: 'relative',
+  },
+  actionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: theme.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  actionBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   actionTitle: {
     color: theme.text,
     fontWeight: '600',
     fontSize: 14,
+    lineHeight: 18,
   },
   activityItem: {
     backgroundColor: theme.backgroundCard,
@@ -391,12 +650,12 @@ const getStyles = (theme) => StyleSheet.create({
     elevation: 2,
   },
   activityIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   activityContent: {
     flex: 1,
@@ -404,22 +663,44 @@ const getStyles = (theme) => StyleSheet.create({
   activityTitle: {
     color: theme.text,
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15,
+    marginBottom: 2,
   },
   activityDescription: {
     color: theme.textSecondary,
     fontSize: 14,
-    marginTop: 4,
+    marginBottom: 4,
   },
   activityTime: {
     color: theme.textLight,
     fontSize: 12,
-    marginTop: 4,
   },
-  noActivityText: {
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
     color: theme.textSecondary,
-    fontStyle: 'italic',
-  }
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyStateTitle: {
+    color: theme.text,
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    color: theme.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
 
 export default DashboardScreen;

@@ -5,11 +5,11 @@ import { View } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 
 // Screens
-import DashboardScreen from '../screens/DashboardScreen';
+import DashboardNavigator from './DashboardNavigator';
 import MembersNavigator from './MembersNavigator';
-import DonationsScreen from '../screens/DonationsScreen';
-import EventsScreen from '../screens/EventsScreen';
-import MoreScreen from '../screens/MoreScreen';
+import DonationNavigator from './DonationNavigator';
+import EventNavigator from './EventNavigator';
+import MoreNavigator from './MoreNavigator';
 
 const Tab = createBottomTabNavigator();
 
@@ -70,7 +70,7 @@ const MainTabs = () => {
     >
       <Tab.Screen
         name="Dashboard"
-        component={DashboardScreen}
+        component={DashboardNavigator}
         options={{ tabBarLabel: 'Início' }}
       />
       <Tab.Screen
@@ -80,17 +80,17 @@ const MainTabs = () => {
       />
       <Tab.Screen
         name="Donations"
-        component={DonationsScreen}
+        component={DonationNavigator}
         options={{ tabBarLabel: 'Doações' }}
       />
       <Tab.Screen
         name="Events"
-        component={EventsScreen}
+        component={EventNavigator}
         options={{ tabBarLabel: 'Eventos' }}
       />
       <Tab.Screen
         name="More"
-        component={MoreScreen}
+        component={MoreNavigator}
         options={{ tabBarLabel: 'Mais' }}
       />
     </Tab.Navigator>

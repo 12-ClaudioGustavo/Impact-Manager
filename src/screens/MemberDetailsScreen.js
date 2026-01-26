@@ -1,75 +1,98 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Linking,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import { useFocusEffect } from '@react-navigation/native';
-import MemberFormModal from '../components/MemberFormModal';
 import { useTheme } from '../contexts/ThemeContext';
+import MemberFormModal from '../components/MemberFormModal';
 
-const MemberDetailsScreen = ({ route, navigation }) => {
-  const { theme } = useTheme();
+const MemberDetailsScreen = ({ navigation }) => {
+  const { theme, isDarkMode } = useTheme();
   const styles = getStyles(theme);
-
+  const route = useRoute();
   const { memberId } = route.params;
+
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [organizationId, setOrganizationId] = useState(null);
 
   const fetchMemberDetails = useCallback(async () => {
-    if(!isEditModalVisible) setLoading(true);
+    setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('organization_id')
+          .eq('auth_id', session.user.id)
+          .single();
+        
+        if (userData) {
+          setOrganizationId(userData.organization_id);
+        }
+      }
+
       const { data, error } = await supabase
         .from('members')
         .select('*')
         .eq('id', memberId)
         .single();
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       setMember(data);
     } catch (error) {
-      console.error("Error fetching member details:", error);
-      Alert.alert("Erro", "Não foi possível carregar os detalhes do membro.");
-      navigation.goBack();
+      console.error('Error fetching member details:', error);
+      Alert.alert('Erro', 'Não foi possível carregar os detalhes do membro.');
     } finally {
       setLoading(false);
     }
-  }, [memberId, navigation, isEditModalVisible]);
+  }, [memberId]);
 
-  useFocusEffect(fetchMemberDetails);
-  
-  const handleDelete = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchMemberDetails();
+    }, [fetchMemberDetails])
+  );
+
+  const handleDelete = () => {
     Alert.alert(
-      "Confirmar Exclusão",
-      `Tem certeza que deseja excluir ${member.full_name}? Esta ação não pode ser desfeita.`,
+      'Confirmar Exclusão',
+      `Tem certeza que deseja excluir "${member.full_name}"? Esta ação não pode ser revertida.`,
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: 'Cancelar', style: 'cancel' },
         {
-          text: "Excluir",
-          style: "destructive",
+          text: 'Excluir',
+          style: 'destructive',
           onPress: async () => {
-            setIsDeleting(true);
             try {
+              // Deletar foto do storage se existir
               if (member.photo_url) {
                 const fileName = member.photo_url.split('/').pop();
                 await supabase.storage.from('member-photos').remove([fileName]);
               }
 
-              const { error: dbError } = await supabase.from('members').delete().eq('id', memberId);
+              const { error } = await supabase.from('members').delete().eq('id', memberId);
+              if (error) throw error;
 
-              if (dbError) throw dbError;
-
-              Alert.alert("Sucesso", "Membro excluído com sucesso.");
+              Alert.alert('Sucesso', 'Membro excluído com sucesso.');
               navigation.goBack();
-
             } catch (error) {
-              console.error("Delete Error:", error);
-              Alert.alert("Erro", "Não foi possível excluir o membro.");
-            } finally {
-              setIsDeleting(false);
+              console.error('Erro ao excluir:', error);
+              Alert.alert('Erro', 'Não foi possível excluir o membro.');
             }
           },
         },
@@ -77,228 +100,567 @@ const MemberDetailsScreen = ({ route, navigation }) => {
     );
   };
 
-  const handleUpdateMember = async (updatedData, id) => {
-    const { error } = await supabase.from('members').update(updatedData).eq('id', id);
-    if (error) throw error;
-    
-    Alert.alert("Sucesso", "Membro atualizado com sucesso!");
-    fetchMemberDetails(); // Re-fetch data to show updated info
+  const handleUpdateMember = async (memberData) => {
+    try {
+      const { error } = await supabase
+        .from('members')
+        .update(memberData)
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      Alert.alert('Sucesso', 'Membro atualizado com sucesso!');
+      setEditModalVisible(false);
+      fetchMemberDetails();
+    } catch (error) {
+      console.error('Erro ao atualizar membro:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar o membro.');
+    }
   };
-  
-  const DetailItem = ({ icon, label, value }) => (
-    <View style={styles.detailItem}>
-      <Ionicons name={icon} size={24} color={theme.iconColor} style={styles.detailIcon} />
-      <View>
-        <Text style={styles.detailLabel}>{label}</Text>
-        <Text style={styles.detailValue}>{value || 'Não informado'}</Text>
+
+  const handleCall = (phone) => {
+    if (!phone) {
+      Alert.alert('Aviso', 'Número de telefone não disponível.');
+      return;
+    }
+    Linking.openURL(`tel:${phone}`);
+  };
+
+  const handleEmail = (email) => {
+    if (!email) {
+      Alert.alert('Aviso', 'Email não disponível.');
+      return;
+    }
+    Linking.openURL(`mailto:${email}`);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Não informado';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-AO', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Ativo':
+        return theme.success;
+      case 'Inativo':
+        return theme.error;
+      case 'Suspenso':
+        return theme.warning;
+      default:
+        return theme.textSecondary;
+    }
+  };
+
+  const InfoCard = ({ icon, label, value, onPress, actionIcon }) => (
+    <TouchableOpacity
+      style={styles.infoCard}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
+      <View style={styles.infoCardLeft}>
+        <View style={[styles.infoIcon, { backgroundColor: theme.primary + '20' }]}>
+          <Ionicons name={icon} size={20} color={theme.primary} />
+        </View>
+        <View style={styles.infoContent}>
+          <Text style={styles.infoLabel}>{label}</Text>
+          <Text style={styles.infoValue} numberOfLines={2}>
+            {value || 'Não informado'}
+          </Text>
+        </View>
       </View>
-    </View>
+      {actionIcon && onPress && (
+        <Ionicons name={actionIcon} size={20} color={theme.textLight} />
+      )}
+    </TouchableOpacity>
+  );
+
+  const ActionButton = ({ icon, label, onPress, color, variant = 'primary' }) => (
+    <TouchableOpacity
+      style={[
+        styles.actionButton,
+        variant === 'outline' && styles.actionButtonOutline,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.actionButtonIcon, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      <Text style={[styles.actionButtonText, { color }]}>{label}</Text>
+    </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Detalhes do Membro</Text>
-            <View style={{ width: 40 }} />
-        </View>
-        <ActivityIndicator style={{ flex: 1 }} size="large" color={theme.primary} />
-      </SafeAreaView>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={styles.loadingText}>Carregando...</Text>
+      </View>
     );
   }
 
   if (!member) {
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                  <Ionicons name="arrow-back" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Erro</Text>
-                <View style={{ width: 40 }} />
-            </View>
-            <View style={styles.content}>
-                <Text style={styles.text}>Membro não encontrado.</Text>
-            </View>
-        </SafeAreaView>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Ionicons name="alert-circle-outline" size={64} color={theme.textLight} />
+          <Text style={styles.errorTitle}>Membro não encontrado</Text>
+          <Text style={styles.errorText}>
+            Não foi possível localizar este membro.
+          </Text>
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.errorButtonText}>Voltar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <MemberFormModal
-        isVisible={isEditModalVisible}
-        onClose={() => setIsEditModalVisible(false)}
-        onSave={handleUpdateMember}
-        memberToEdit={member}
-        organizationId={member.organization_id}
-      />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} disabled={isDeleting}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Detalhes do Membro</Text>
-        <View style={{flexDirection: 'row'}}>
-            <TouchableOpacity style={styles.headerButton} onPress={() => setIsEditModalVisible(true)} disabled={isDeleting}>
-              <Ionicons name="pencil" size={22} color={theme.text} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} onPress={handleDelete} disabled={isDeleting}>
-              {isDeleting ? <ActivityIndicator size="small" color={theme.error} /> : <Ionicons name="trash" size={22} color={theme.error} />}
-            </TouchableOpacity>
-        </View>
-      </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileHeader}>
-            {member.photo_url ? (
-                <Image source={{ uri: member.photo_url }} style={styles.profilePhoto} />
-            ) : (
-                <View style={styles.profileAvatar}>
-                    <Text style={styles.profileAvatarText}>{member.full_name ? member.full_name.charAt(0).toUpperCase() : '?'}</Text>
-                </View>
-            )}
-            <Text style={styles.profileName}>{member.full_name}</Text>
-            <Text style={styles.profileRole}>{member.membership_type}</Text>
-             <View style={[styles.statusBadge, member.membership_status === 'Ativo' ? styles.statusActive : styles.statusInactive]}>
-                <Text style={[styles.statusText, member.membership_status === 'Ativo' ? styles.statusActiveText : styles.statusInactiveText]}>{member.membership_status}</Text>
-            </View>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
+      <LinearGradient
+        colors={isDarkMode ? [theme.gradientStart, theme.gradientEnd] : [theme.primary, theme.primaryDark]}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.textOnPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Perfil do Membro</Text>
+          <TouchableOpacity style={styles.headerButton} onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={24} color={theme.textOnPrimary} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.detailsSection}>
-            <DetailItem icon="mail-outline" label="Email" value={member.email} />
-            <DetailItem icon="call-outline" label="Telefone" value={member.phone} />
-            <DetailItem icon="transgender-outline" label="Gênero" value={member.gender} />
-            <DetailItem icon="home-outline" label="Endereço" value={member.address} />
-            <DetailItem icon="shield-half-outline" label="Contato de Emergência" value={member.emergency_contact} />
-            <DetailItem icon="document-text-outline" label="Observações" value={member.notes} />
+        <View style={styles.profileSection}>
+          {member.photo_url ? (
+            <Image source={{ uri: member.photo_url }} style={styles.profilePhoto} />
+          ) : (
+            <LinearGradient
+              colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.2)']}
+              style={styles.profileAvatar}
+            >
+              <Text style={styles.profileAvatarText}>
+                {member.full_name?.charAt(0).toUpperCase()}
+              </Text>
+            </LinearGradient>
+          )}
+          <Text style={styles.profileName}>{member.full_name}</Text>
+          {member.membership_type && (
+            <View style={styles.profileBadge}>
+              <Ionicons name="ribbon" size={14} color={theme.textOnPrimary} />
+              <Text style={styles.profileBadgeText}>{member.membership_type}</Text>
+            </View>
+          )}
+          <View
+            style={[
+              styles.statusPill,
+              { backgroundColor: getStatusColor(member.membership_status) + '30' },
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: getStatusColor(member.membership_status) },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                { color: getStatusColor(member.membership_status) },
+              ]}
+            >
+              {member.membership_status}
+            </Text>
+          </View>
         </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Ações Rápidas */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+          <View style={styles.actionsGrid}>
+            <ActionButton
+              icon="call"
+              label="Ligar"
+              color={theme.success}
+              onPress={() => handleCall(member.phone)}
+            />
+            <ActionButton
+              icon="mail"
+              label="Email"
+              color={theme.info}
+              onPress={() => handleEmail(member.email)}
+            />
+            <ActionButton
+              icon="create"
+              label="Editar"
+              color={theme.warning}
+              onPress={() => setEditModalVisible(true)}
+            />
+          </View>
+        </View>
+
+        {/* Informações de Contato */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="call-outline" size={20} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Informações de Contato</Text>
+          </View>
+          <InfoCard
+            icon="mail-outline"
+            label="Email"
+            value={member.email}
+            onPress={member.email ? () => handleEmail(member.email) : null}
+            actionIcon={member.email ? 'open-outline' : null}
+          />
+          <InfoCard
+            icon="call-outline"
+            label="Telefone"
+            value={member.phone}
+            onPress={member.phone ? () => handleCall(member.phone) : null}
+            actionIcon={member.phone ? 'call-outline' : null}
+          />
+          <InfoCard
+            icon="location-outline"
+            label="Endereço"
+            value={member.address}
+          />
+        </View>
+
+        {/* Informações Pessoais */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="person-outline" size={20} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Informações Pessoais</Text>
+          </View>
+          <InfoCard icon="male-female-outline" label="Gênero" value={member.gender} />
+          <InfoCard
+            icon="calendar-outline"
+            label="Data de Nascimento"
+            value={member.birth_date ? formatDate(member.birth_date) : 'Não informado'}
+          />
+          <InfoCard
+            icon="alert-circle-outline"
+            label="Contato de Emergência"
+            value={member.emergency_contact}
+            onPress={
+              member.emergency_contact
+                ? () => handleCall(member.emergency_contact)
+                : null
+            }
+            actionIcon={member.emergency_contact ? 'call-outline' : null}
+          />
+        </View>
+
+        {/* Informações de Membro */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} />
+            <Text style={styles.sectionTitle}>Informações de Membro</Text>
+          </View>
+          <InfoCard
+            icon="ribbon-outline"
+            label="Tipo de Membro"
+            value={member.membership_type}
+          />
+          <InfoCard
+            icon="calendar-outline"
+            label="Data de Ingresso"
+            value={formatDate(member.created_at)}
+          />
+          <InfoCard
+            icon="time-outline"
+            label="Última Atualização"
+            value={formatDate(member.updated_at)}
+          />
+        </View>
+
+        {/* Observações */}
+        {member.notes && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+              <Text style={styles.sectionTitle}>Observações</Text>
+            </View>
+            <View style={styles.notesCard}>
+              <Text style={styles.notesText}>{member.notes}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={{ height: 20 }} />
       </ScrollView>
+
+      <MemberFormModal
+        isVisible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        onSave={handleUpdateMember}
+        organizationId={organizationId}
+        memberToEdit={member}
+      />
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-    backgroundColor: theme.backgroundCard,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.text,
-  },
-  headerButton: {
-      padding: 8,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  text: {
-    fontSize: 16,
-    color: theme.text,
-  },
-  profileHeader: {
-      alignItems: 'center',
-      paddingVertical: 24,
-      backgroundColor: theme.backgroundCard,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-  },
-  profilePhoto: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-  },
-  profileAvatar: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: theme.infoLight,
+const getStyles = (theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    centered: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-  },
-  profileAvatarText: {
-      color: theme.primary,
-      fontSize: 40,
-      fontWeight: 'bold',
-  },
-  profileName: {
-      fontSize: 24,
-      fontWeight: 'bold',
+      padding: 32,
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: theme.textSecondary,
+    },
+    errorTitle: {
+      fontSize: 20,
+      fontWeight: '600',
       color: theme.text,
       marginTop: 16,
-  },
-  profileRole: {
-      fontSize: 16,
+      marginBottom: 8,
+    },
+    errorText: {
+      fontSize: 14,
       color: theme.textSecondary,
-      marginTop: 4,
-  },
-  statusBadge: {
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusActive: {
-    backgroundColor: theme.successLight,
-  },
-  statusInactive: {
-    backgroundColor: theme.errorLight,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  statusActiveText: {
-    color: theme.success,
-  },
-  statusInactiveText: {
-    color: theme.error,
-  },
-  detailsSection: {
-      marginTop: 24,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: theme.backgroundCard,
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  detailIcon: {
-      marginRight: 20,
-      marginTop: 3,
-  },
-  detailLabel: {
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+    errorButton: {
+      backgroundColor: theme.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    errorButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: theme.textOnPrimary,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 32,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    headerTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 24,
+    },
+    headerButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.textOnPrimary,
+    },
+    profileSection: {
+      alignItems: 'center',
+    },
+    profilePhoto: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      borderWidth: 4,
+      borderColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    profileAvatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      borderWidth: 4,
+      borderColor: 'rgba(255, 255, 255, 0.3)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileAvatarText: {
+      fontSize: 40,
+      fontWeight: 'bold',
+      color: theme.textOnPrimary,
+    },
+    profileName: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: theme.textOnPrimary,
+      marginTop: 16,
+    },
+    profileBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      marginTop: 8,
+      gap: 6,
+    },
+    profileBadgeText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.textOnPrimary,
+    },
+    statusPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 16,
+      marginTop: 12,
+      gap: 8,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    statusText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    content: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 20,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+      gap: 8,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: theme.text,
+    },
+    actionsGrid: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    actionButton: {
+      flex: 1,
+      flexDirection: 'column',
+      alignItems: 'center',
+      backgroundColor: theme.backgroundCard,
+      padding: 16,
+      borderRadius: 16,
+      gap: 8,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: theme.shadowOpacity,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    actionButtonOutline: {
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    actionButtonIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actionButtonText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: theme.backgroundCard,
+      padding: 16,
+      borderRadius: 16,
+      marginBottom: 12,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: theme.shadowOpacity,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    infoCardLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      gap: 12,
+    },
+    infoIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoLabel: {
       fontSize: 12,
       color: theme.textSecondary,
-      marginBottom: 2,
-  },
-  detailValue: {
+      marginBottom: 4,
+    },
+    infoValue: {
       fontSize: 16,
+      fontWeight: '600',
       color: theme.text,
-  }
-});
+    },
+    notesCard: {
+      backgroundColor: theme.backgroundCard,
+      padding: 16,
+      borderRadius: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.primary,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: theme.shadowOpacity,
+      shadowRadius: 2,
+      elevation: 2,
+    },
+    notesText: {
+      fontSize: 15,
+      color: theme.text,
+      lineHeight: 22,
+    },
+  });
 
 export default MemberDetailsScreen;

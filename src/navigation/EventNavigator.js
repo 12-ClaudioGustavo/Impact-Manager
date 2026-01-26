@@ -1,15 +1,15 @@
-import React from "react";
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import EventsScreen from "../screens/EventsScreen";
-import AddEvent from "../screens/AddEventScreen";
+import React from 'react';
+import { createStackNavigator } from '@react-navigation/stack';
+import EventsScreen from '../screens/EventsScreen';
+import AddEventScreen from '../screens/AddEventScreen';
 
-const Stack = createNativeStackNavigator();
+const Stack = createStackNavigator();
 
 const EventNavigator = () => {
   return (
-    <Stack.Navigator initialRouteName="EventsList" screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="EventsList" component={EventsScreen} />
-      <Stack.Screen name="AddEvent" component={AddEvent} />
+      <Stack.Screen name="AddEvent" component={AddEventScreen} />
     </Stack.Navigator>
   );
 };

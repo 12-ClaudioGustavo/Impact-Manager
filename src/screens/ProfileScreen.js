@@ -14,8 +14,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import PhoneInputField from "../components/PhoneInputField";
+import Button from "../components/common/Button";
 import { supabase } from "../lib/supabase";
 import { useTheme } from '../contexts/ThemeContext';
+import * as Localization from 'expo-localization';
 
 const ProfileScreen = ({ navigation }) => {
   const { theme } = useTheme();
@@ -28,6 +30,7 @@ const ProfileScreen = ({ navigation }) => {
     email: "",
     phone: "",
   });
+  const [countryCode, setCountryCode] = useState('AO'); // Default para Angola
   const phoneInput = useRef(null);
 
   useEffect(() => {
@@ -37,35 +40,40 @@ const ProfileScreen = ({ navigation }) => {
   const fetchProfile = async () => {
     try {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return;
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilizador não encontrado");
 
-      const user = session.user;
+      // Garante que o email (que é imutável) está sempre presente
+      setFormData(prev => ({ ...prev, email: user.email }));
 
-      let fullName = user.user_metadata?.full_name || "";
-      let phone = user.user_metadata?.phone || "";
-      const email = user.email;
-
-      const { data: userData, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("auth_id", user.id)
+      const { data, error, status } = await supabase
+        .from("profiles")
+        .select(`full_name, phone, country_code`)
+        .eq("id", user.id)
         .single();
 
-      if (userData && !error) {
-        fullName = userData.full_name || fullName;
-        phone = userData.phone || phone;
+      // O erro 406 significa "nenhuma linha encontrada", o que é esperado para um perfil novo.
+      // Ignoramos esse erro específico.
+      if (error && status !== 406) {
+        throw error;
       }
-
-      setFormData({
-        fullName,
-        email,
-        phone,
-      });
+      
+      if (data) {
+        // Se o perfil já existe, preenchemos os dados.
+        setFormData(prev => ({
+          ...prev,
+          fullName: data.full_name || "",
+          phone: data.phone || "",
+        }));
+        setCountryCode(data.country_code || Localization.getLocales()[0]?.regionCode || 'AO');
+      } else {
+        // Se o perfil não existe, apenas detectamos a localização para o novo perfil.
+        setCountryCode(Localization.getLocales()[0]?.regionCode || 'AO');
+      }
     } catch (error) {
+      Alert.alert("Erro", "Não foi possível carregar o seu perfil.");
       console.error("Error fetching profile:", error);
-      Alert.alert("Erro", "Não foi possível carregar os dados do perfil.");
     } finally {
       setFetching(false);
     }
@@ -79,40 +87,30 @@ const ProfileScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+       const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Utilizador não autenticado");
 
-      const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          full_name: formData.fullName,
-          phone: formData.phone,
-        },
-      });
 
-      if (authError) throw authError;
+      const updates = {
+        id: user.id,
+        full_name: formData.fullName,
+        phone: formData.phone,
+        country_code: countryCode, // Salva o código do país
+        updated_at: new Date(),
+      };
 
-      const { error: dbError } = await supabase
-        .from("users")
-        .update({
-          full_name: formData.fullName,
-          phone: formData.phone,
-          updated_at: new Date(),
-        })
-        .eq("auth_id", session.user.id);
+      const { error } = await supabase.from("profiles").upsert(updates);
 
-      if (dbError) {
-        console.log(
-          "DB Update Error (might be RLS, ignoring if Auth updated):",
-          dbError,
-        );
+      if (error) {
+        throw error;
       }
 
       Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
-      navigation.goBack();
     } catch (error) {
-      console.error("Update error:", error);
       Alert.alert("Erro", "Falha ao atualizar perfil: " + error.message);
+      console.error("Update error:", error);
     } finally {
       setLoading(false);
     }
@@ -171,9 +169,13 @@ const ProfileScreen = ({ navigation }) => {
 
             <PhoneInputField
               ref={phoneInput}
+              defaultCode={countryCode}
               value={formData.phone}
               onChangeFormattedText={(text) => {
                 setFormData({ ...formData, phone: text });
+              }}
+              onCountryChange={(country) => {
+                setCountryCode(country.cca2); // cca2 é o código do país, ex: 'AO'
               }}
               label="Telefone"
               placeholder="Digite seu telefone"
@@ -195,17 +197,15 @@ const ProfileScreen = ({ navigation }) => {
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleUpdate}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.textOnPrimary} />
-            ) : (
-              <Text style={styles.saveButtonText}>Salvar Alterações</Text>
-            )}
-          </TouchableOpacity>
+          {loading ? (
+            <ActivityIndicator size="large" color={theme.primary} />
+          ) : (
+            <Button
+              title="Salvar Alterações"
+              onPress={handleUpdate}
+              disabled={loading}
+            />
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -299,17 +299,6 @@ const getStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.backgroundCard,
     borderTopWidth: 1,
     borderTopColor: theme.border,
-  },
-  saveButton: {
-    backgroundColor: theme.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    color: theme.textOnPrimary,
-    fontWeight: "600",
-    fontSize: 16,
   },
 });
 
